@@ -128,7 +128,9 @@ select_stack() {
         echo "  3) LLMP  - OpenLiteSpeed + MariaDB + PHP"
         echo "  4) MODERN - Nginx + Node.js + PostgreSQL"
         echo ""
-        read -p "Enter choice [1-4]: " STACK_CHOICE
+        read -p "Enter choice [1-4]: " STACK_CHOICE < /dev/tty
+        # Fallback: if read fails (no tty), default to LEMP
+        STACK_CHOICE=${STACK_CHOICE:-2}
     fi
 
     case $STACK_CHOICE in
