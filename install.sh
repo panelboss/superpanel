@@ -44,16 +44,32 @@ err()  { echo -e "${RED}[✗] $1${NC}" | tee -a "$LOG_FILE"; exit 1; }
 info() { echo -e "${CYAN}[i]${NC} $1" | tee -a "$LOG_FILE"; }
 
 spinner() {
+    # Simplified: just show running status, actual install runs sync
     local pid=$1 msg=$2
     local spin='-\|/'
     local i=0
     while kill -0 "$pid" 2>/dev/null; do
         printf "\r${CYAN}[%c]${NC} %s" "${spin:i++%4:1}" "$msg"
-        sleep 0.1
+        sleep 0.3
     done
-    printf "\r"
-    wait "$pid"
-    return $?
+    wait "$pid" 2>/dev/null
+    local ret=$?
+    printf "\r${GREEN}[✓]${NC} %s\n" "$msg"
+    return $ret
+}
+
+run_install() {
+    # Run install command synchronously, log output
+    local msg=$1; shift
+    info "$msg..."
+    "$@" >> "$LOG_FILE" 2>&1
+    local ret=$?
+    if [ $ret -eq 0 ]; then
+        log "$msg"
+    else
+        warn "$msg (exit code: $ret, check $LOG_FILE)"
+    fi
+    return $ret
 }
 
 #==========================================================================
@@ -86,24 +102,17 @@ detect_os() {
 #==========================================================================
 
 install_deps() {
-    info "Installing base dependencies..."
-    
     case $PKG_MGR in
         apt-get)
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq >> "$LOG_FILE" 2>&1
-            apt-get install -y -qq curl wget git unzip tar \
-                software-properties-common gnupg ca-certificates \
-                openssl ufw fail2ban >> "$LOG_FILE" 2>&1 &
+            run_install "Installing dependencies" apt-get install -y -qq curl wget git unzip tar software-properties-common gnupg ca-certificates openssl ufw fail2ban
             ;;
         yum)
             yum install -y -q epel-release >> "$LOG_FILE" 2>&1
-            yum install -y -q curl wget git unzip tar \
-                openssl firewalld fail2ban >> "$LOG_FILE" 2>&1 &
+            run_install "Installing dependencies" yum install -y -q curl wget git unzip tar openssl firewalld fail2ban
             ;;
     esac
-    spinner $! "Installing dependencies..."
-    log "Base dependencies installed"
 }
 
 #==========================================================================
@@ -166,49 +175,21 @@ select_stack() {
 #==========================================================================
 
 install_webserver() {
-    info "Installing $WEBSERVER..."
-
     case $WEBSERVER in
         nginx)
-            case $PKG_MGR in
-                apt-get)
-                    apt-get install -y -qq nginx >> "$LOG_FILE" 2>&1 &
-                    ;;
-                yum)
-                    yum install -y -q nginx >> "$LOG_FILE" 2>&1 &
-                    ;;
-            esac
-            spinner $! "Installing Nginx..."
+            run_install "Installing Nginx" $PKG_MGR install -y -qq nginx
             systemctl enable nginx --now
             ;;
         apache2)
-            case $PKG_MGR in
-                apt-get)
-                    apt-get install -y -qq apache2 >> "$LOG_FILE" 2>&1 &
-                    ;;
-                yum)
-                    yum install -y -q httpd >> "$LOG_FILE" 2>&1 &
-                    WEBSERVER="httpd"
-                    ;;
-            esac
-            spinner $! "Installing Apache..."
+            run_install "Installing Apache" $PKG_MGR install -y -qq $([ "$PKG_MGR" = "yum" ] && echo "httpd" || echo "apache2")
+            [ "$PKG_MGR" = "yum" ] && WEBSERVER="httpd"
             systemctl enable $WEBSERVER --now
             ;;
         openlitespeed)
             wget -O - https://repo.litespeed.sh | bash >> "$LOG_FILE" 2>&1
-            case $PKG_MGR in
-                apt-get)
-                    apt-get install -y -qq openlitespeed >> "$LOG_FILE" 2>&1 &
-                    ;;
-                yum)
-                    yum install -y -q openlitespeed >> "$LOG_FILE" 2>&1 &
-                    ;;
-            esac
-            spinner $! "Installing OpenLiteSpeed..."
-            /usr/local/lsws/bin/lshttpd -v
+            run_install "Installing OpenLiteSpeed" $PKG_MGR install -y -qq openlitespeed
             ;;
     esac
-
     log "$WEBSERVER installed"
 }
 
@@ -217,47 +198,20 @@ install_webserver() {
 #==========================================================================
 
 install_database() {
-    info "Installing $DB_SERVER..."
-
     case $DB_SERVER in
         mysql)
-            case $PKG_MGR in
-                apt-get)
-                    apt-get install -y -qq mysql-server >> "$LOG_FILE" 2>&1 &
-                    ;;
-                yum)
-                    yum install -y -q mysql-server >> "$LOG_FILE" 2>&1 &
-                    ;;
-            esac
-            spinner $! "Installing MySQL..."
+            run_install "Installing MySQL" $PKG_MGR install -y -qq mysql-server
             systemctl enable mysql --now
             ;;
         mariadb)
-            case $PKG_MGR in
-                apt-get)
-                    apt-get install -y -qq mariadb-server >> "$LOG_FILE" 2>&1 &
-                    ;;
-                yum)
-                    yum install -y -q mariadb-server >> "$LOG_FILE" 2>&1 &
-                    ;;
-            esac
-            spinner $! "Installing MariaDB..."
+            run_install "Installing MariaDB" $PKG_MGR install -y -qq mariadb-server
             systemctl enable mariadb --now
             ;;
         postgresql)
-            case $PKG_MGR in
-                apt-get)
-                    apt-get install -y -qq postgresql postgresql-contrib >> "$LOG_FILE" 2>&1 &
-                    ;;
-                yum)
-                    yum install -y -q postgresql-server >> "$LOG_FILE" 2>&1 &
-                    ;;
-            esac
-            spinner $! "Installing PostgreSQL..."
+            run_install "Installing PostgreSQL" $PKG_MGR install -y -qq postgresql postgresql-contrib 2>/dev/null || run_install "Installing PostgreSQL" $PKG_MGR install -y -qq postgresql-server
             systemctl enable postgresql --now
             ;;
     esac
-
     log "$DB_SERVER installed"
 }
 
@@ -271,26 +225,18 @@ install_php() {
         return
     fi
 
-    info "Installing PHP $PHP_VERSION..."
-
     case $PKG_MGR in
         apt-get)
-            add-apt-repository -y ppa:ondrej/php >> "$LOG_FILE" 2>&1
+            add-apt-repository -y ppa:ondrej/php >> "$LOG_FILE" 2>&1 || true
             apt-get update -qq >> "$LOG_FILE" 2>&1
-            apt-get install -y -qq php${PHP_VERSION} php${PHP_VERSION}-fpm \
-                php${PHP_VERSION}-mysql php${PHP_VERSION}-curl php${PHP_VERSION}-json \
-                php${PHP_VERSION}-mbstring php${PHP_VERSION}-xml php${PHP_VERSION}-zip \
-                php${PHP_VERSION}-gd php${PHP_VERSION}-intl php${PHP_VERSION}-bcmath \
-                >> "$LOG_FILE" 2>&1 &
+            run_install "Installing PHP $PHP_VERSION" apt-get install -y -qq php${PHP_VERSION} php${PHP_VERSION}-fpm php${PHP_VERSION}-mysql php${PHP_VERSION}-curl php${PHP_VERSION}-json php${PHP_VERSION}-mbstring php${PHP_VERSION}-xml php${PHP_VERSION}-zip php${PHP_VERSION}-gd php${PHP_VERSION}-intl php${PHP_VERSION}-bcmath
             ;;
         yum)
-            yum install -y -q https://rpms.remirepo.net/enterprise/remi-release-8.rpm >> "$LOG_FILE" 2>&1
-            yum module enable -y php:remi-${PHP_VERSION} >> "$LOG_FILE" 2>&1
-            yum install -y -q php php-fpm php-mysqlnd php-curl php-json \
-                php-mbstring php-xml php-zip php-gd >> "$LOG_FILE" 2>&1 &
+            yum install -y -q https://rpms.remirepo.net/enterprise/remi-release-8.rpm >> "$LOG_FILE" 2>&1 || true
+            yum module enable -y php:remi-${PHP_VERSION} >> "$LOG_FILE" 2>&1 || true
+            run_install "Installing PHP $PHP_VERSION" yum install -y -q php php-fpm php-mysqlnd php-curl php-json php-mbstring php-xml php-zip php-gd
             ;;
     esac
-    spinner $! "Installing PHP..."
     log "PHP $PHP_VERSION installed"
 }
 
@@ -299,20 +245,9 @@ install_php() {
 #==========================================================================
 
 install_nodejs() {
-    info "Installing Node.js 20.x..."
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >> "$LOG_FILE" 2>&1
-    
-    case $PKG_MGR in
-        apt-get)
-            apt-get install -y -qq nodejs >> "$LOG_FILE" 2>&1 &
-            ;;
-        yum)
-            yum install -y -q nodejs >> "$LOG_FILE" 2>&1 &
-            ;;
-    esac
-    spinner $! "Installing Node.js..."
-    
-    npm install -g pm2 yarn >> "$LOG_FILE" 2>&1
+    run_install "Installing Node.js 20.x" $PKG_MGR install -y -qq nodejs
+    npm install -g pm2 >> "$LOG_FILE" 2>&1
     log "Node.js $(node -v) installed"
 }
 
@@ -346,14 +281,12 @@ PANEL_PASSWORD=$PANEL_PASS
 ENVFILE
 
     # Install dependencies
-    info "Installing panel dependencies..."
-    npm install >> "$LOG_FILE" 2>&1 &
-    spinner $! "Installing npm packages..."
+    run_install "Installing npm packages" npm install
 
     # Build Next.js
     info "Building panel (this may take a minute)..."
-    npm run build >> "$LOG_FILE" 2>&1 &
-    spinner $! "Building Next.js..."
+    npm run build >> "$LOG_FILE" 2>&1
+    log "Panel build complete"
 
     # Create PM2 ecosystem
     cat > ecosystem.config.js << PM2CONFIG
@@ -451,23 +384,17 @@ BACKUPSH
 #==========================================================================
 
 install_extras() {
-    info "Installing optional tools..."
-
-    # Docker
+    # Docker (optional)
     if command -v docker &>/dev/null; then
         log "Docker already installed"
     else
-        curl -fsSL https://get.docker.com | bash >> "$LOG_FILE" 2>&1 &
-        spinner $! "Installing Docker..."
-        log "Docker installed"
+        curl -fsSL https://get.docker.com | bash >> "$LOG_FILE" 2>&1 || warn "Docker install skipped"
     fi
 
     # Certbot (SSL)
-    case $PKG_MGR in
-        apt-get) apt-get install -y -qq certbot python3-certbot-nginx >> "$LOG_FILE" 2>&1 ;;
-        yum) yum install -y -q certbot python3-certbot-nginx >> "$LOG_FILE" 2>&1 ;;
-    esac
-    log "Certbot installed"
+    run_install "Installing Certbot" $PKG_MGR install -y -qq certbot python3-certbot-nginx 2>/dev/null || \
+    run_install "Installing Certbot" $PKG_MGR install -y -qq certbot
+}
 }
 
 #==========================================================================
