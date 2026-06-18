@@ -111,19 +111,23 @@ install_deps() {
 #==========================================================================
 
 select_stack() {
-    echo ""
-    echo -e "${BOLD}Select your stack:${NC}"
-    echo ""
-    echo "  1) LAMP  - Apache + MySQL + PHP"
-    echo "  2) LEMP  - Nginx + MySQL + PHP"
-    echo "  3) LLMP  - OpenLiteSpeed + MariaDB + PHP"
-    echo "  4) MODERN - Nginx + Node.js + PostgreSQL"
-    echo ""
-
+    # If piped (curl|bash), auto-select LEMP; otherwise prompt
     if [ -n "$STACK" ]; then
         STACK_CHOICE=$STACK
         info "Using preset stack: $STACK_CHOICE"
+    elif [ ! -t 0 ]; then
+        STACK_CHOICE=2
+        info "Non-interactive mode: auto-selected LEMP (Nginx + MySQL + PHP)"
+        info "Use --stack 1-4 to change: curl ... | bash -s -- --stack 1"
     else
+        echo ""
+        echo -e "${BOLD}Select your stack:${NC}"
+        echo ""
+        echo "  1) LAMP  - Apache + MySQL + PHP"
+        echo "  2) LEMP  - Nginx + MySQL + PHP"
+        echo "  3) LLMP  - OpenLiteSpeed + MariaDB + PHP"
+        echo "  4) MODERN - Nginx + Node.js + PostgreSQL"
+        echo ""
         read -p "Enter choice [1-4]: " STACK_CHOICE
     fi
 
