@@ -1,6 +1,6 @@
 #!/bin/bash
 #==========================================================================
-#  WebPanel - One-click VPS Web Management Panel Installer
+#  SUPERPANEL - One-click VPS Web Management Panel Installer
 #  Supports: LAMP, LEMP, LLMP, Modern Stack
 #  Version: 1.0.0
 #==========================================================================
@@ -17,11 +17,11 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # Config
-PANEL_DIR="/opt/webpanel"
+PANEL_DIR="/opt/SUPERPANEL"
 PANEL_PORT="8080"
 PANEL_USER="admin"
 PANEL_PASS=$(openssl rand -base64 12 2>/dev/null || head -c 12 /dev/urandom | base64)
-LOG_FILE="/tmp/webpanel-install.log"
+LOG_FILE="/tmp/SUPERPANEL-install.log"
 GITHUB_REPO="https://github.com/panelboss/superpanel"
 
 #==========================================================================
@@ -32,7 +32,7 @@ logo() {
     clear
     echo -e "${GREEN}"
     echo "╔══════════════════════════════════════════════╗"
-    echo "║       🚀  WEBPANEL INSTALLER  🚀            ║"
+    echo "║       🚀  SUPERPANEL INSTALLER  🚀            ║"
     echo "║       One-Click Server Manager               ║"
     echo "╚══════════════════════════════════════════════╝"
     echo -e "${NC}"
@@ -294,68 +294,69 @@ install_nodejs() {
 }
 
 #==========================================================================
-#  INSTALL WEBPANEL
+#  INSTALL SUPERPANEL
 #==========================================================================
 
 install_panel() {
-    info "Deploying WebPanel..."
+    info "Deploying SuperPanel..."
 
     # Create panel directory
     mkdir -p "$PANEL_DIR"
     cd "$PANEL_DIR"
 
-    # Create package.json
-    cat > package.json << 'PACKAGEJSON'
-{
-  "name": "webpanel",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev -p ${PANEL_PORT:-8080}",
-    "build": "next build",
-    "start": "next start -p ${PANEL_PORT:-8080}"
-  },
-  "dependencies": {
-    "next": "^14.0.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "ssh2": "^1.15.0",
-    "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.0"
-  }
-}
-PACKAGEJSON
+    # Clone panel from GitHub
+    info "Downloading panel source..."
+    if [ -d ".git" ]; then
+        git pull origin master >> "$LOG_FILE" 2>&1
+    else
+        git clone https://github.com/panelboss/superpanel.git "$PANEL_DIR" >> "$LOG_FILE" 2>&1
+    fi
+
+    # Go to panel source
+    cd "$PANEL_DIR/panel"
 
     # Create .env
     cat > .env << ENVFILE
 PANEL_PORT=$PANEL_PORT
 PANEL_USER=$PANEL_USER
-JWT_SECRET=$(openssl rand -base64 32 2>/dev/null || head -c 32 /dev/urandom | base64)
+PANEL_PASSWORD=$PANEL_PASS
 ENVFILE
 
     # Install dependencies
-    npm install --production >> "$LOG_FILE" 2>&1 &
-    spinner $! "Installing panel dependencies..."
+    info "Installing panel dependencies..."
+    npm install >> "$LOG_FILE" 2>&1 &
+    spinner $! "Installing npm packages..."
+
+    # Build Next.js
+    info "Building panel (this may take a minute)..."
+    npm run build >> "$LOG_FILE" 2>&1 &
+    spinner $! "Building Next.js..."
 
     # Create PM2 ecosystem
     cat > ecosystem.config.js << PM2CONFIG
 module.exports = {
   apps: [{
-    name: 'webpanel',
+    name: 'superpanel',
     script: 'node_modules/.bin/next',
     args: 'start -p $PANEL_PORT',
-    cwd: '$PANEL_DIR',
-    env: { NODE_ENV: 'production' }
+    cwd: '$PANEL_DIR/panel',
+    env: { 
+      NODE_ENV: 'production',
+      PANEL_PASSWORD: '$PANEL_PASS'
+    }
   }]
 };
 PM2CONFIG
+
+    # Stop old instance if exists
+    pm2 delete superpanel 2>/dev/null || true
 
     # Start with PM2
     pm2 start ecosystem.config.js >> "$LOG_FILE" 2>&1
     pm2 save >> "$LOG_FILE" 2>&1
     pm2 startup >> "$LOG_FILE" 2>&1
 
-    log "WebPanel deployed on port $PANEL_PORT"
+    log "SuperPanel deployed on port $PANEL_PORT"
 }
 
 #==========================================================================
@@ -392,9 +393,9 @@ configure_firewall() {
 setup_backup() {
     info "Setting up auto-backup..."
     
-    cat > /opt/webpanel/backup.sh << 'BACKUPSH'
+    cat > /opt/SUPERPANEL/backup.sh << 'BACKUPSH'
 #!/bin/bash
-BACKUP_DIR="/opt/webpanel/backups"
+BACKUP_DIR="/opt/SUPERPANEL/backups"
 DATE=$(date +%Y%m%d_%H%M%S)
 mkdir -p "$BACKUP_DIR"
 
@@ -414,10 +415,10 @@ tar -czf "$BACKUP_DIR/apache_$DATE.tar.gz" /etc/apache2/ 2>/dev/null
 find "$BACKUP_DIR" -mtime +7 -delete
 BACKUPSH
 
-    chmod +x /opt/webpanel/backup.sh
+    chmod +x /opt/SUPERPANEL/backup.sh
     
     # Daily backup at 2 AM
-    (crontab -l 2>/dev/null; echo "0 2 * * * /opt/webpanel/backup.sh") | crontab -
+    (crontab -l 2>/dev/null; echo "0 2 * * * /opt/SUPERPANEL/backup.sh") | crontab -
 
     log "Auto-backup scheduled (daily at 2 AM)"
 }
@@ -474,8 +475,8 @@ print_summary() {
     echo ""
     echo -e "  ${BOLD}Quick commands:${NC}"
     echo -e "  pm2 status          # Check panel status"
-    echo -e "  pm2 restart webpanel # Restart panel"
-    echo -e "  pm2 logs webpanel    # View panel logs"
+    echo -e "  pm2 restart SUPERPANEL # Restart panel"
+    echo -e "  pm2 logs SUPERPANEL    # View panel logs"
     echo ""
 }
 
