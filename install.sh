@@ -395,7 +395,6 @@ install_extras() {
     run_install "Installing Certbot" $PKG_MGR install -y -qq certbot python3-certbot-nginx 2>/dev/null || \
     run_install "Installing Certbot" $PKG_MGR install -y -qq certbot
 }
-}
 
 #==========================================================================
 #  FINAL SUMMARY
