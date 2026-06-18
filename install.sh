@@ -252,6 +252,27 @@ install_nodejs() {
 }
 
 #==========================================================================
+#  SETUP SWAP (prevents OOM during build)
+#==========================================================================
+
+setup_swap() {
+    if [ -f /swapfile ]; then
+        log "Swap already exists"
+        return
+    fi
+    local mem_mb=$(free -m | awk '/^Mem:/{print $2}')
+    if [ "$mem_mb" -lt 1800 ]; then
+        info "Low memory detected (${mem_mb}MB) — creating 2GB swap..."
+        fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
+        chmod 600 /swapfile
+        mkswap /swapfile >> "$LOG_FILE" 2>&1
+        swapon /swapfile >> "$LOG_FILE" 2>&1
+        echo '/swapfile none swap sw 0 0' >> /etc/fstab
+        log "Swap 2GB created"
+    fi
+}
+
+#==========================================================================
 #  INSTALL SUPERPANEL
 #==========================================================================
 
@@ -457,6 +478,7 @@ main() {
     install_database
     install_php
     install_nodejs
+    setup_swap
     install_panel
     install_extras
     configure_firewall
