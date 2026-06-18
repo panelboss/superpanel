@@ -2,7 +2,7 @@
 #==========================================================================
 #  SUPERPANEL - One-click VPS Web Management Panel Installer
 #  Supports: LAMP, LEMP, LLMP, Modern Stack
-#  Version: 1.0.0
+#  Version: 1.1.0 — Fixed interactive + pipe mode, auto-detect TTY
 #==========================================================================
 
 set -e
@@ -110,16 +110,17 @@ install_deps() {
 #  STACK SELECTION
 #==========================================================================
 
+#==========================================================================
+#  STACK SELECTION
+#==========================================================================
+
 select_stack() {
-    # If piped (curl|bash), auto-select LEMP; otherwise prompt
+    # Priority: 1) --stack flag, 2) interactive prompt, 3) pipe auto-detect
     if [ -n "$STACK" ]; then
         STACK_CHOICE=$STACK
-        info "Using preset stack: $STACK_CHOICE"
-    elif [ ! -t 0 ]; then
-        STACK_CHOICE=2
-        info "Non-interactive mode: auto-selected LEMP (Nginx + MySQL + PHP)"
-        info "Use --stack 1-4 to change: curl ... | bash -s -- --stack 1"
-    else
+        info "Stack: $STACK_CHOICE (via --stack flag)"
+    elif [ -t 0 ] && [ -t 1 ]; then
+        # True interactive terminal — ask user
         echo ""
         echo -e "${BOLD}Select your stack:${NC}"
         echo ""
@@ -128,9 +129,25 @@ select_stack() {
         echo "  3) LLMP  - OpenLiteSpeed + MariaDB + PHP"
         echo "  4) MODERN - Nginx + Node.js + PostgreSQL"
         echo ""
-        read -p "Enter choice [1-4]: " STACK_CHOICE < /dev/tty
-        # Fallback: if read fails (no tty), default to LEMP
+        printf "Enter choice [1-4]: "
+        read STACK_CHOICE
         STACK_CHOICE=${STACK_CHOICE:-2}
+    else
+        # Piped mode — auto-select with clear notice
+        STACK_CHOICE=2
+        echo ""
+        echo -e "${YELLOW}╔══════════════════════════════════════════════╗${NC}"
+        echo -e "${YELLOW}║  Running in PIPE mode (curl | bash)         ║${NC}"
+        echo -e "${YELLOW}║  Auto-selected: LEMP (Nginx+MySQL+PHP)      ║${NC}"
+        echo -e "${YELLOW}╚══════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "${CYAN}For interactive install, run:${NC}"
+        echo -e "  wget ${GITHUB_REPO}/raw/master/install.sh && bash install.sh"
+        echo -e "${CYAN}Or specify stack directly:${NC}"
+        echo -e "  curl -fsSL ... | bash -s -- --stack 2   # LEMP"
+        echo -e "  curl -fsSL ... | bash -s -- --stack 4   # MODERN"
+        echo ""
+        sleep 2
     fi
 
     case $STACK_CHOICE in
