@@ -8,25 +8,25 @@
 ## 📦 Quick Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tejok/webpanel/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/panelboss/superpanel/main/install.sh | bash
 ```
 
 **Pilih stack:**
 ```bash
 # LAMP (Apache + MySQL + PHP)
-curl -fsSL https://raw.githubusercontent.com/tejok/webpanel/main/install.sh | bash -s -- --stack 1
+curl -fsSL https://raw.githubusercontent.com/panelboss/superpanel/main/install.sh | bash -s -- --stack 1
 
 # LEMP (Nginx + MySQL + PHP)  
-curl -fsSL https://raw.githubusercontent.com/tejok/webpanel/main/install.sh | bash -s -- --stack 2
+curl -fsSL https://raw.githubusercontent.com/panelboss/superpanel/main/install.sh | bash -s -- --stack 2
 
 # LLMP (OpenLiteSpeed + MariaDB + PHP)
-curl -fsSL https://raw.githubusercontent.com/tejok/webpanel/main/install.sh | bash -s -- --stack 3
+curl -fsSL https://raw.githubusercontent.com/panelboss/superpanel/main/install.sh | bash -s -- --stack 3
 
 # MODERN (Nginx + Node.js + PostgreSQL)
-curl -fsSL https://raw.githubusercontent.com/tejok/webpanel/main/install.sh | bash -s -- --stack 4
+curl -fsSL https://raw.githubusercontent.com/panelboss/superpanel/main/install.sh | bash -s -- --stack 4
 
 # Custom port
-curl -fsSL https://raw.githubusercontent.com/tejok/webpanel/main/install.sh | bash -s -- --port 3000
+curl -fsSL https://raw.githubusercontent.com/panelboss/superpanel/main/install.sh | bash -s -- --port 3000
 ```
 
 ## ✨ Features
@@ -111,7 +111,7 @@ systemctl restart php8.1-fpm
 
 ## 📝 License
 
-MIT © 2026 Tejok
+MIT © 2026 PanelBoss
 
 ---
 

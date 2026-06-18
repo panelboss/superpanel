@@ -22,7 +22,7 @@ PANEL_PORT="8080"
 PANEL_USER="admin"
 PANEL_PASS=$(openssl rand -base64 12 2>/dev/null || head -c 12 /dev/urandom | base64)
 LOG_FILE="/tmp/webpanel-install.log"
-GITHUB_REPO="https://github.com/tejok/webpanel"
+GITHUB_REPO="https://github.com/panelboss/superpanel"
 
 #==========================================================================
 #  UTILS
